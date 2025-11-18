@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   }
 
   // ★ あなたが使いたいモデル（ListModels の name をそのまま）
-  const MODEL_NAME = "models/gemini-2.5-flash";
+  const MODEL_NAME = "models/gemini-2.5";
 
   // ★ 実際に叩く URL をログに出す
   const url =
