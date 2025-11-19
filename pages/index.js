@@ -18,17 +18,25 @@ export default function Home() {
     const userText = input.trim();
     const userMessage = { role: "user", text: userText };
 
-    // 画面に先に追加
-    setMessages((prev) => [...prev, userMessage]);
+    // ① 画面用のメッセージを先に更新
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInput("");
     setLoading(true);
     setError("");
+
+    // ② Gemini に送る用の「直近の会話履歴」
+    //   └ トークン節約のため、直近6件だけ送る
+    const messagesForApi = updatedMessages.slice(-6);
 
     try {
       const resp = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userText }),
+        body: JSON.stringify({
+          // ← ここがポイント：単発の message ではなく「会話の配列」を送る
+          messages: messagesForApi,
+        }),
       });
 
       if (!resp.ok) {
@@ -44,7 +52,9 @@ export default function Home() {
       ]);
     } catch (err) {
       console.error(err);
-      setError("エラーが発生しました。少し時間をおいて、もう一度お試しください。");
+      setError(
+        "エラーが発生しました。少し時間をおいて、もう一度お試しください。"
+      );
 
       setMessages((prev) => [
         ...prev,
@@ -146,11 +156,9 @@ export default function Home() {
               padding: "0 16px",
               borderRadius: "8px",
               border: "none",
-              background:
-                loading || !input.trim() ? "#ccc" : "#0070f3",
+              background: loading || !input.trim() ? "#ccc" : "#0070f3",
               color: "#fff",
-              cursor:
-                loading || !input.trim() ? "default" : "pointer",
+              cursor: loading || !input.trim() ? "default" : "pointer",
             }}
           >
             送信
