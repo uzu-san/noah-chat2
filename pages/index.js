@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
 
 export default function Home() {
   const [input, setInput] = useState("");
@@ -11,6 +12,14 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // ★ 自動スクロール用の ref
+  const messagesEndRef = useRef(null);
+
+  // ★ messages が変わるたびに最下部へスクロール
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
@@ -18,25 +27,21 @@ export default function Home() {
     const userText = input.trim();
     const userMessage = { role: "user", text: userText };
 
-    // ① 画面用のメッセージを先に更新
+    // 画面に先に表示
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput("");
     setLoading(true);
     setError("");
 
-    // ② Gemini に送る用の「直近の会話履歴」
-    //   └ トークン節約のため、直近6件だけ送る
+    // トークン節約：直近6件だけ API に送る
     const messagesForApi = updatedMessages.slice(-6);
 
     try {
       const resp = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          // ← ここがポイント：単発の message ではなく「会話の配列」を送る
-          messages: messagesForApi,
-        }),
+        body: JSON.stringify({ messages: messagesForApi }),
       });
 
       if (!resp.ok) {
@@ -120,51 +125,20 @@ export default function Home() {
                   textAlign: "left",
                 }}
               >
-                {m.text}
+                {/* ★ Markdown対応：太文字・見出し・箇条書きOK */}
+                <ReactMarkdown>{m.text}</ReactMarkdown>
               </div>
             </div>
           ))}
 
           {loading && <div>NOAH が考えています…</div>}
+
+          {/* ★ 自動スクロールの着地点 */}
+          <div ref={messagesEndRef} />
         </div>
 
         {error && (
           <p style={{ color: "red", marginBottom: "8px" }}>{error}</p>
         )}
 
-        {/* 入力フォーム */}
-        <form
-          onSubmit={handleSubmit}
-          style={{ display: "flex", gap: "8px", marginTop: "8px" }}
-        >
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="メッセージを入力"
-            style={{
-              flex: 1,
-              padding: "10px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={loading || !input.trim()}
-            style={{
-              padding: "0 16px",
-              borderRadius: "8px",
-              border: "none",
-              background: loading || !input.trim() ? "#ccc" : "#0070f3",
-              color: "#fff",
-              cursor: loading || !input.trim() ? "default" : "pointer",
-            }}
-          >
-            送信
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
+        {/* 入*
