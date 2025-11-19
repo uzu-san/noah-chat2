@@ -116,9 +116,21 @@ export default async function handler(req, res) {
 
     const afterJson = Date.now(); // ←追加（JSON.parse が終わったタイミング）
 
-    const replyText =
-      data.candidates?.[0]?.content?.parts?.[0]?.text ??
-      "（応答がありません）";
+    let replyText = "";
+
+try {
+  const parts = data.candidates?.[0]?.content?.parts;
+  if (parts && Array.isArray(parts)) {
+    replyText = parts.map(p => p.text || "").join("");
+  }
+} catch (e) {
+  console.error("PARSE ERROR:", e);
+}
+
+if (!replyText) {
+  replyText = "（応答がありません）";
+}
+
 
     // ★ ⑤ 最後にまとめて時間ログを出す
     const totalTime = afterJson - startTime;
