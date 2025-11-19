@@ -119,7 +119,7 @@ export default function Home() {
                   padding: "8px 12px",
                   borderRadius: "12px",
                   background: m.role === "user" ? "#d0ebff" : "#fff",
-                  border: "1px solid #ddd",
+                  border: "1px solid "#ddd",
                   maxWidth: "80%",
                   whiteSpace: "pre-wrap",
                   textAlign: "left",
@@ -141,4 +141,39 @@ export default function Home() {
           <p style={{ color: "red", marginBottom: "8px" }}>{error}</p>
         )}
 
-        {/* 入*
+        {/* 入力フォーム */}
+        <form
+          onSubmit={handleSubmit}
+          style={{ display: "flex", gap: "8px", marginTop: "8px" }}
+        >
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="メッセージを入力"
+            style={{
+              flex: 1,
+              padding: "10px",
+              borderRadius: "8px",
+              border: "1px solid "#ccc",
+            }}
+          />
+          <button
+            type="submit"
+            disabled={loading || !input.trim()}
+            style={{
+              padding: "0 16px",
+              borderRadius: "8px",
+              border: "none",
+              background: loading || !input.trim() ? "#ccc" : "#0070f3",
+              color: "#fff",
+              cursor: loading || !input.trim() ? "default" : "pointer",
+            }}
+          >
+            送信
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
