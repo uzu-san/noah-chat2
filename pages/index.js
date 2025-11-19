@@ -12,10 +12,10 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // ★ 自動スクロール用の ref
+  // 自動スクロール用の ref
   const messagesEndRef = useRef(null);
 
-  // ★ messages が変わるたびに最下部へスクロール
+  // messages が変わるたびに最下部へスクロール
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -119,13 +119,13 @@ export default function Home() {
                   padding: "8px 12px",
                   borderRadius: "12px",
                   background: m.role === "user" ? "#d0ebff" : "#fff",
-                  border: "1px solid "#ddd",
+                  border: "1px solid #ddd",   // ←ここを修正
                   maxWidth: "80%",
                   whiteSpace: "pre-wrap",
                   textAlign: "left",
                 }}
               >
-                {/* ★ Markdown対応：太文字・見出し・箇条書きOK */}
+                {/* Markdown対応：太字・見出し・箇条書きOK */}
                 <ReactMarkdown>{m.text}</ReactMarkdown>
               </div>
             </div>
@@ -133,7 +133,7 @@ export default function Home() {
 
           {loading && <div>NOAH が考えています…</div>}
 
-          {/* ★ 自動スクロールの着地点 */}
+          {/* 自動スクロールの着地点 */}
           <div ref={messagesEndRef} />
         </div>
 
@@ -155,7 +155,7 @@ export default function Home() {
               flex: 1,
               padding: "10px",
               borderRadius: "8px",
-              border: "1px solid "#ccc",
+              border: "1px solid #ccc",
             }}
           />
           <button
