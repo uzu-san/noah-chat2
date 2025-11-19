@@ -30,152 +30,103 @@ export default async function handler(req, res) {
     return res.status(500).json({ text: "Missing API key (CLIENT_KEY)" });
   }
 
-  // 使うモデル
-  const MODEL_NAME = "models/gemini-2.5-flash";
+  const MODEL_ID = "gemini-2.5-flash"; // 公式どおり
+  const endpoint =
+    "https://generativelanguage.googleapis.com/v1beta/models/" +
+    MODEL_ID +
+    ":generateContent";
 
-  // 実際に叩く URL（※ログでは key を出さない）
-  const url =
-    "https://generativelanguage.googleapis.com/v1beta/" +
-    MODEL_NAME +
-    ":generateContent?key=" +
-    apiKey;
+  console.error("DEBUG MODEL_ID:", MODEL_ID); // APIキーは出さない
+  console.error("DEBUG ENDPOINT:", endpoint.replace(apiKey, "***"));
 
-  console.error("DEBUG MODEL_NAME:", MODEL_NAME);
-  console.error("DEBUG PATH:", "/v1beta/" + MODEL_NAME + ":generateContent");
-
+  // 公式サンプルに合わせた最小 payload
   const payload = {
     contents: [
       {
         role: "user",
-        parts: [{ text: userMessage }],
+        parts: [
+          {
+            text:
+              userMessage +
+              "\n\n※日本語で、できるだけ短く（3〜5文程度）答えてください。",
+          },
+        ],
       },
     ],
-    generationConfig: {
-      maxOutputTokens: 128, // ここはお好みで
-      temperature: 0.7,
-    },
+    // いったん maxOutputTokens は指定しない
+    // generationConfig: { ... } をどうしても使いたくなったら後で追加
   };
 
   try {
     const beforeFetch = Date.now();
 
-    const response = await fetch(url, {
+    const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey, // ✅ 公式どおりヘッダーで渡す
+      },
       body: JSON.stringify(payload),
     });
 
     const afterFetch = Date.now();
-    const raw = await response.text();
-    const afterText = Date.now();
 
-    if (!response.ok) {
-      console.error("Gemini API error:", response.status, raw);
-
-      const totalTimeError = Date.now() - startTime;
-      const fetchTimeError = afterFetch - beforeFetch;
-      const textTimeError = afterText - afterFetch;
-
-      console.error("TIME total (error):", totalTimeError, "ms");
-      console.error("TIME fetch (error):", fetchTimeError, "ms");
-      console.error("TIME text() (error):", textTimeError, "ms");
-
-      return res.status(500).json({
-        text: "Gemini API error",
-        status: response.status,
-        detail: raw,
-      });
-    }
-
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch (e) {
+    const data = await response.json().catch((e) => {
       console.error("JSON parse error:", e);
-
-      const totalTimeError = Date.now() - startTime;
-      const fetchTimeError = afterFetch - beforeFetch;
-      const textTimeError = afterText - afterFetch;
-
-      console.error("TIME total (json error):", totalTimeError, "ms");
-      console.error("TIME fetch (json error):", fetchTimeError, "ms");
-      console.error("TIME text() (json error):", textTimeError, "ms");
-
-      return res.status(500).json({
-        text: "Invalid JSON from Gemini",
-        detail: raw,
-      });
-    }
+      throw new Error("Invalid JSON from Gemini");
+    });
 
     const afterJson = Date.now();
 
-    // ---------- ここが今回の「本命修正」部分 ----------
-    // できるだけ多くのパターンに対応して text を抜き出す
+    if (!response.ok) {
+      console.error("Gemini API error:", response.status, JSON.stringify(data));
+      console.error("TIME total (error):", Date.now() - startTime, "ms");
+      console.error("TIME fetch (error):", afterFetch - beforeFetch, "ms");
+      return res.status(500).json({
+        text: "Gemini API error",
+        status: response.status,
+        detail: data,
+      });
+    }
+
+    // ---- ここがテキスト取り出しの「コア」 ----
     let replyText = "";
 
-    try {
-      // 1. SDK と同じように data.text があればそれを優先
-      if (typeof data.text === "string" && data.text.trim()) {
-        replyText = data.text;
-      } else if (Array.isArray(data.candidates) && data.candidates.length > 0) {
-        const c0 = data.candidates[0];
-
-        // content が配列の場合とオブジェクトの場合どちらも対応
-        const contentsArray = Array.isArray(c0.content)
-          ? c0.content
-          : c0.content
-          ? [c0.content]
-          : [];
-
-        const partsTexts = [];
-
-        for (const content of contentsArray) {
-          const parts = content?.parts;
-          if (!Array.isArray(parts)) continue;
-
-          for (const p of parts) {
-            // thinking 付きモデルだと、parts の中に text 以外も混ざる
-            if (typeof p.text === "string") {
-              partsTexts.push(p.text);
-            }
-            // もし output_text 形式で返る場合（将来用の保険）
-            if (p.output_text && typeof p.output_text.text === "string") {
-              partsTexts.push(p.output_text.text);
-            }
-          }
-        }
-
-        replyText = partsTexts.join("").trim();
+    // SDK と同じく data.text があれば最優先
+    if (typeof data.text === "string" && data.text.trim()) {
+      replyText = data.text.trim();
+    } else if (Array.isArray(data.candidates) && data.candidates.length > 0) {
+      const parts = data.candidates[0]?.content?.parts;
+      if (Array.isArray(parts)) {
+        replyText = parts
+          .map((p) => (typeof p.text === "string" ? p.text : ""))
+          .join("")
+          .trim();
       }
-    } catch (e) {
-      console.error("PARSE replyText ERROR:", e);
     }
 
-    // うまく取れなかった場合は raw を少しだけ表示して調査用に残す
     if (!replyText) {
-      console.error("WARN: replyText is empty. RAW (first 500 chars):");
-      console.error(raw.slice(0, 500));
-      replyText = "（応答がありません）";
+      console.error(
+        "WARN: replyText empty. finishReason:",
+        data.candidates?.[0]?.finishReason,
+      );
+      console.error(
+        "RAW first 500 chars:",
+        JSON.stringify(data).slice(0, 500),
+      );
+      replyText =
+        "（Gemini からテキストが返ってきませんでした。時間をおいてもう一度お試しください。）";
     }
-    // ---------- 修正ここまで ----------
+    // ---- ここまで ----
 
-    const totalTime = afterJson - startTime;
-    const fetchTime = afterFetch - beforeFetch;
-    const textTime = afterText - afterFetch;
-    const jsonTime = afterJson - afterText;
-
-    console.error("TIME total:", totalTime, "ms");
-    console.error("TIME fetch:", fetchTime, "ms");
-    console.error("TIME text():", textTime, "ms");
-    console.error("TIME JSON.parse:", jsonTime, "ms");
+    console.error("TIME total:", afterJson - startTime, "ms");
+    console.error("TIME fetch:", afterFetch - beforeFetch, "ms");
+    console.error("TIME JSON.parse:", afterJson - afterFetch, "ms");
 
     return res.status(200).json({ text: replyText });
-  } catch (error) {
-    console.error("Handler error:", error);
-
-    const totalTimeCatch = Date.now() - startTime;
-    console.error("TIME total (catch):", totalTimeCatch, "ms");
-
+  } catch (err) {
+    console.error("Handler error:", err);
+    console.error("TIME total (catch):", Date.now() - startTime, "ms");
     return res.status(500).json({ text: "Internal server error" });
   }
 }
