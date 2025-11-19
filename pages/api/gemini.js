@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ text: "Method not allowed" });
   }
 
-  // body が string でも object でも対応
+  // body が string の場合も対応
   let body = req.body;
   if (typeof body === "string") {
     try {
@@ -23,23 +23,25 @@ export default async function handler(req, res) {
     return res.status(400).json({ text: "No message provided" });
   }
 
-  // 環境変数から API キー取得
+  // API キー
   const apiKey = process.env.CLIENT_KEY;
   if (!apiKey) {
     console.error("CLIENT_KEY is missing");
     return res.status(500).json({ text: "Missing API key (CLIENT_KEY)" });
   }
 
-  const MODEL_ID = "gemini-2.5-flash"; // 公式どおり
+  // モデル
+  const MODEL_ID = "gemini-2.5-flash";
+
   const endpoint =
     "https://generativelanguage.googleapis.com/v1beta/models/" +
     MODEL_ID +
     ":generateContent";
 
-  console.error("DEBUG MODEL_ID:", MODEL_ID); // APIキーは出さない
-  console.error("DEBUG ENDPOINT:", endpoint.replace(apiKey, "***"));
+  console.error("DEBUG MODEL_ID:", MODEL_ID);
+  console.error("DEBUG ENDPOINT:", endpoint);
 
-  // 公式サンプルに合わせた最小 payload
+  // 必要最小限の payload（公式準拠）
   const payload = {
     contents: [
       {
@@ -48,29 +50,31 @@ export default async function handler(req, res) {
           {
             text:
               userMessage +
-              "\n\n※日本語で、できるだけ短く（3〜5文程度）答えてください。",
+              "\n\n※日本語で短く（3〜5文程度）答えてください。",
           },
         ],
       },
     ],
-    // いったん maxOutputTokens は指定しない
-    // generationConfig: { ... } をどうしても使いたくなったら後で追加
   };
 
   try {
     const beforeFetch = Date.now();
 
+    // -----------------------------
+    // ① Gemini API へリクエスト
+    // -----------------------------
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-goog-api-key": apiKey, // ✅ 公式どおりヘッダーで渡す
+        "x-goog-api-key": apiKey, // 公式：URL ではなくヘッダー
       },
       body: JSON.stringify(payload),
     });
 
     const afterFetch = Date.now();
 
+    // JSON 化
     const data = await response.json().catch((e) => {
       console.error("JSON parse error:", e);
       throw new Error("Invalid JSON from Gemini");
@@ -78,10 +82,22 @@ export default async function handler(req, res) {
 
     const afterJson = Date.now();
 
+    // ------------------------------------------
+    // ② ここが「503 専用メッセージ」を返す場所です
+    // ------------------------------------------
+    if (response.status === 503) {
+      console.error("Gemini API overloaded (503).");
+
+      return res.status(503).json({
+        text:
+          "現在AIサーバーが混雑しています。\n少し時間をおいて、もう一度お試しください。",
+        status: 503,
+      });
+    }
+
+    // 503 以外でエラーの場合
     if (!response.ok) {
       console.error("Gemini API error:", response.status, JSON.stringify(data));
-      console.error("TIME total (error):", Date.now() - startTime, "ms");
-      console.error("TIME fetch (error):", afterFetch - beforeFetch, "ms");
       return res.status(500).json({
         text: "Gemini API error",
         status: response.status,
@@ -89,13 +105,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // ---- ここがテキスト取り出しの「コア」 ----
+    // ----------------------------------------
+    // ③ 返信テキスト（parts の text）を取り出す
+    // ----------------------------------------
     let replyText = "";
 
-    // SDK と同じく data.text があれば最優先
-    if (typeof data.text === "string" && data.text.trim()) {
-      replyText = data.text.trim();
-    } else if (Array.isArray(data.candidates) && data.candidates.length > 0) {
+    if (Array.isArray(data.candidates) && data.candidates.length > 0) {
       const parts = data.candidates[0]?.content?.parts;
       if (Array.isArray(parts)) {
         replyText = parts
@@ -105,28 +120,29 @@ export default async function handler(req, res) {
       }
     }
 
+    // 返答が空の場合
     if (!replyText) {
       console.error(
         "WARN: replyText empty. finishReason:",
-        data.candidates?.[0]?.finishReason,
+        data.candidates?.[0]?.finishReason
       );
       console.error(
-        "RAW first 500 chars:",
-        JSON.stringify(data).slice(0, 500),
+        "RAW first 300 chars:",
+        JSON.stringify(data).slice(0, 300)
       );
-      replyText =
-        "（Gemini からテキストが返ってきませんでした。時間をおいてもう一度お試しください。）";
-    }
-    // ---- ここまで ----
 
+      replyText =
+        "（AI が返答できませんでした。もう一度お試しください。）";
+    }
+
+    // 時間ログ
     console.error("TIME total:", afterJson - startTime, "ms");
     console.error("TIME fetch:", afterFetch - beforeFetch, "ms");
-    console.error("TIME JSON.parse:", afterJson - afterFetch, "ms");
+    console.error("TIME JSON:", afterJson - afterFetch, "ms");
 
     return res.status(200).json({ text: replyText });
   } catch (err) {
     console.error("Handler error:", err);
-    console.error("TIME total (catch):", Date.now() - startTime, "ms");
     return res.status(500).json({ text: "Internal server error" });
   }
 }
