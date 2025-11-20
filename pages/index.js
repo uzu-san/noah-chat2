@@ -283,7 +283,7 @@ export default function Home() {
           />
           <button
             type="submit"
-            disabled=(loading || !input.trim())
+            disabled={loading || !input.trim()}
             style={{
               padding: "0 18px",
               borderRadius: "10px",
