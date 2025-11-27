@@ -33,7 +33,7 @@ export default async function handler(req, res) {
   }
 
   // モデル
-  const MODEL_ID = "gemini-2.0-flash";
+  const MODEL_ID = "gemini-2.5-flash";
 
   const endpoint =
     "https://generativelanguage.googleapis.com/v1beta/models/" +
