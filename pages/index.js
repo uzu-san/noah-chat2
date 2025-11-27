@@ -289,7 +289,7 @@ export default function Home() {
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="今の気持ちや状況を書いてみてください（改行できます）"
+            placeholder="今の気持ちや状況を書いてみてください"
             rows={2}
             style={{
               flex: 1,
