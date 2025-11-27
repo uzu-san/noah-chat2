@@ -110,7 +110,7 @@ export default function Home() {
           borderRadius: "16px",
           padding: "24px 20px 20px",
           boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
-          border: "1px solid "#e5e7eb",
+          border: "1px solid #e5e7eb",
         }}
       >
         {/* ヘッダー */}
