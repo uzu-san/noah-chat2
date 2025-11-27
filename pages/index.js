@@ -15,9 +15,20 @@ export default function Home() {
   // 自動スクロール用
   const messagesEndRef = useRef(null);
 
+  // 入力欄の自動リサイズ用
+  const textareaRef = useRef(null);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // 入力が変わるたびにテキストエリアの高さを自動調整
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }, [input]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -74,12 +85,12 @@ export default function Home() {
       style={{
         minHeight: "100vh",
         background: "#f3f4f6",
-        padding: "24px 12px",
+        padding: "16px 8px", // ← スマホでも余白がちょうど良い感じに
       }}
     >
       <div
         style={{
-          maxWidth: "860px",
+          maxWidth: "720px", // ← 少し細めでスマホでも見やすい
           margin: "0 auto",
           background: "#ffffff",
           borderRadius: "16px",
@@ -253,7 +264,13 @@ export default function Home() {
         </div>
 
         {error && (
-          <p style={{ color: "#dc2626", marginBottom: "8px", fontSize: "13px" }}>
+          <p
+            style={{
+              color: "#dc2626",
+              marginBottom: "8px",
+              fontSize: "13px",
+            }}
+          >
             {error}
           </p>
         )}
@@ -265,13 +282,15 @@ export default function Home() {
             display: "flex",
             gap: "8px",
             marginTop: "8px",
+            alignItems: "flex-end",
           }}
         >
-          <input
-            type="text"
+          <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="今の気持ちや状況を、ひとことで書いてみてください"
+            placeholder="今の気持ちや状況を書いてみてください（改行できます）"
+            rows={2}
             style={{
               flex: 1,
               padding: "10px 12px",
@@ -279,13 +298,18 @@ export default function Home() {
               border: "1px solid #d1d5db",
               fontSize: "14px",
               outline: "none",
+              resize: "none",
+              lineHeight: "1.5",
+              minHeight: "44px",
+              maxHeight: "140px",
+              overflowY: "auto",
             }}
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
             style={{
-              padding: "0 18px",
+              padding: "8px 18px",
               borderRadius: "10px",
               border: "none",
               background:
@@ -293,8 +317,7 @@ export default function Home() {
               color: "#ffffff",
               fontSize: "14px",
               fontWeight: 600,
-              cursor:
-                loading || !input.trim() ? "default" : "pointer",
+              cursor: loading || !input.trim() ? "default" : "pointer",
               whiteSpace: "nowrap",
             }}
           >
