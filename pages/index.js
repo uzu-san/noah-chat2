@@ -30,8 +30,8 @@ export default function Home() {
     el.style.height = el.scrollHeight + "px";
   }, [input]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // ★ 送信ロジックをここにまとめる（Enter 送信＆フォーム送信から両方使う）
+  const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
     const userText = input.trim();
@@ -80,6 +80,20 @@ export default function Home() {
     }
   };
 
+  // フォーム送信（送信ボタン）から呼ばれる
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await sendMessage();
+  };
+
+  // ★ Enter キーで送信 / Shift+Enter で改行
+  const handleKeyDown = async (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      await sendMessage();
+    }
+  };
+
   return (
     <div
       style={{
@@ -96,7 +110,7 @@ export default function Home() {
           borderRadius: "16px",
           padding: "24px 20px 20px",
           boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
-          border: "1px solid #e5e7eb",
+          border: "1px solid "#e5e7eb",
         }}
       >
         {/* ヘッダー */}
@@ -289,7 +303,8 @@ export default function Home() {
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="今の気持ちや状況を書いてみてください"
+            onKeyDown={handleKeyDown} // ★ ここで Enter をフック
+            placeholder="今の気持ちや状況を書いてみてください（Shift+Enterで改行、Enterで送信）"
             rows={2}
             style={{
               flex: 1,
