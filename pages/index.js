@@ -304,7 +304,7 @@ export default function Home() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown} // ★ ここで Enter をフック
-            placeholder="今の気持ちや状況を書いてみてください（Shift+Enterで改行、Enterで送信）"
+            placeholder="今の気持ちや状況を書いてみてください"
             rows={2}
             style={{
               flex: 1,
