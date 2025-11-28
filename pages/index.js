@@ -1,6 +1,21 @@
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 
+// ★ ここで音声読み上げ用の関数を定義します
+function speak(text) {
+  if (typeof window === "undefined") return; // SSR対策
+
+  if (!window.speechSynthesis) {
+    alert("このブラウザは音声読み上げに対応していません。");
+    return;
+  }
+
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = "ja-JP"; // 日本語で読み上げ
+  window.speechSynthesis.cancel(); // 連続クリック時に前の読み上げを止める
+  window.speechSynthesis.speak(utter);
+}
+
 export default function Home() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState([
@@ -99,12 +114,12 @@ export default function Home() {
       style={{
         minHeight: "100vh",
         background: "#f3f4f6",
-        padding: "16px 8px", // ← スマホでも余白がちょうど良い感じに
+        padding: "16px 8px",
       }}
     >
       <div
         style={{
-          maxWidth: "720px", // ← 少し細めでスマホでも見やすい
+          maxWidth: "720px",
           margin: "0 auto",
           background: "#ffffff",
           borderRadius: "16px",
@@ -257,6 +272,24 @@ export default function Home() {
                       {m.text}
                     </ReactMarkdown>
                   </div>
+
+                  {/* ★ 音声で聞くボタン（各メッセージの下） */}
+                  <button
+                    type="button"
+                    onClick={() => speak(m.text)}
+                    style={{
+                      marginTop: "4px",
+                      fontSize: "11px",
+                      color: "#6b7280",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      alignSelf: isUser ? "flex-end" : "flex-start",
+                    }}
+                  >
+                    🔊 このメッセージを聞く
+                  </button>
                 </div>
               </div>
             );
