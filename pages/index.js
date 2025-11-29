@@ -1,27 +1,43 @@
-import { useState, useRef, useEffect } from "react";
+   import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 
 /* ----------------------------------------
-   ★ Google TTS 高速＋自然音声版 speak()
+   Google TTS 高速＋自然音声版 speak()
+   （前の音声を止めてから再生・キャッシュ付き）
 ---------------------------------------- */
 
-// TTS結果をキャッシュ（同じ文は即再生）
+// 今再生中の Audio を保持
+let currentAudio = null;
+
+// TTS結果をキャッシュ（同じ文は2回目以降すぐ再生）
 const audioCache = new Map();
-const MAX_TTS_LENGTH = 400; // 高速化のため読み上げは400文字までに制限
+const MAX_TTS_LENGTH = 400; // 高速化のため読み上げは400文字まで
 
 async function speak(originalText) {
   if (!originalText) return;
 
-  // 長文は先頭だけ読み上げ（速度最優先）
+  // すでに再生中なら止める
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    currentAudio = null;
+  }
+
+  // 長文は先頭だけ読み上げ（速度優先）
   let text = originalText.trim();
   if (text.length > MAX_TTS_LENGTH) {
     text = text.slice(0, MAX_TTS_LENGTH) + "。以下は読み上げを省略します。";
   }
 
-  // キャッシュにあれば即再生（超高速）
+  // キャッシュにあれば即再生
   if (audioCache.has(text)) {
     const cachedUrl = audioCache.get(text);
-    new Audio(cachedUrl).play();
+    const audio = new Audio(cachedUrl);
+    currentAudio = audio;
+    audio.play();
+    audio.onended = () => {
+      if (currentAudio === audio) currentAudio = null;
+    };
     return;
   }
 
@@ -41,17 +57,22 @@ async function speak(originalText) {
     const blob = new Blob([arrayBuffer], { type: "audio/mpeg" });
     const url = URL.createObjectURL(blob);
 
-    // キャッシュへ保存
+    // キャッシュ保存
     audioCache.set(text, url);
 
-    new Audio(url).play();
+    const audio = new Audio(url);
+    currentAudio = audio;
+    audio.play();
+    audio.onended = () => {
+      if (currentAudio === audio) currentAudio = null;
+    };
   } catch (e) {
     console.error("TTS client error:", e);
   }
 }
 
 /* ----------------------------------------
-   ここから先はあなたの元のコードそのまま
+   ここから下は NOAH 本体（前とほぼ同じ）
 ---------------------------------------- */
 
 export default function Home() {
@@ -110,7 +131,10 @@ export default function Home() {
       console.error(err);
       setError("エラーが発生しました。少し時間をおいて、もう一度お試しください。");
 
-      setMessages((prev) => [...prev, { role: "assistant", text: "（応答がありません）" }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: "（応答がありません）" },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -147,6 +171,7 @@ export default function Home() {
           border: "1px solid #e5e7eb",
         }}
       >
+        {/* ヘッダー */}
         <header
           style={{
             display: "flex",
@@ -178,6 +203,7 @@ export default function Home() {
           </div>
         </header>
 
+        {/* メッセージ一覧 */}
         <div
           style={{
             borderRadius: "12px",
@@ -209,6 +235,7 @@ export default function Home() {
                     alignItems: isUser ? "flex-end" : "flex-start",
                   }}
                 >
+                  {/* ラベル */}
                   <span
                     style={{
                       fontSize: "11px",
@@ -219,6 +246,7 @@ export default function Home() {
                     {isUser ? "あなた" : "NOAH"}
                   </span>
 
+                  {/* 吹き出し */}
                   <div
                     style={{
                       display: "inline-block",
@@ -241,7 +269,7 @@ export default function Home() {
                     <ReactMarkdown>{m.text}</ReactMarkdown>
                   </div>
 
-                  {/* 音声読み上げ */}
+                  {/* 音声読み上げボタン */}
                   <button
                     type="button"
                     onClick={() => speak(m.text)}
@@ -290,6 +318,7 @@ export default function Home() {
           </p>
         )}
 
+        {/* 入力フォーム */}
         <form
           onSubmit={handleSubmit}
           style={{
