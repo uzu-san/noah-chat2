@@ -1,19 +1,41 @@
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 
-// ★ ここで音声読み上げ用の関数を定義します
+// ★ より自然な日本語ボイスを自動選択する Web Speech API版
 function speak(text) {
-  if (typeof window === "undefined") return; // SSR対策
+  if (typeof window === "undefined") return;
+  if (!window.speechSynthesis) return;
 
-  if (!window.speechSynthesis) {
-    alert("このブラウザは音声読み上げに対応していません。");
+  const synth = window.speechSynthesis;
+
+  // Chrome で voices が遅延するケースに対応
+  let voices = synth.getVoices();
+  if (!voices.length) {
+    synth.onvoiceschanged = () => speak(text);
     return;
   }
 
+  // 日本語ボイス抽出
+  const jaVoices = voices.filter((v) => v.lang.startsWith("ja"));
+
+  // 女性的・自然なボイスを優先
+  const preferredVoice =
+    jaVoices.find((v) => /female|woman|女性/i.test(v.name)) ||
+    jaVoices[0] ||
+    voices.find((v) => v.lang.startsWith("ja")) ||
+    voices[0];
+
   const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = "ja-JP"; // 日本語で読み上げ
-  window.speechSynthesis.cancel(); // 連続クリック時に前の読み上げを止める
-  window.speechSynthesis.speak(utter);
+  utter.lang = "ja-JP";
+  utter.voice = preferredVoice;
+
+  // より自然に聞こえるチューニング
+  utter.rate = 1.03;
+  utter.pitch = 1.0;
+  utter.volume = 1.0;
+
+  synth.cancel();
+  synth.speak(utter);
 }
 
 export default function Home() {
@@ -37,7 +59,7 @@ export default function Home() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 入力が変わるたびにテキストエリアの高さを自動調整
+  // テキストエリアの自動リサイズ
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -45,21 +67,21 @@ export default function Home() {
     el.style.height = el.scrollHeight + "px";
   }, [input]);
 
-  // ★ 送信ロジックをここにまとめる（Enter 送信＆フォーム送信から両方使う）
+  // ★ 送信ロジック
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
     const userText = input.trim();
     const userMessage = { role: "user", text: userText };
 
-    // 画面に先に追加
+    // ユーザーメッセージを画面に先に追加
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput("");
     setLoading(true);
     setError("");
 
-    // API には直近 6 件だけ送る（トークン節約）
+    // API に送るのは直近6件
     const messagesForApi = updatedMessages.slice(-6);
 
     try {
@@ -69,39 +91,29 @@ export default function Home() {
         body: JSON.stringify({ messages: messagesForApi }),
       });
 
-      if (!resp.ok) {
-        throw new Error(`API error: ${resp.status}`);
-      }
+      if (!resp.ok) throw new Error(`API error: ${resp.status}`);
 
       const data = await resp.json();
       const replyText = data.text?.trim() || "（応答がありません）";
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", text: replyText },
-      ]);
+      setMessages((prev) => [...prev, { role: "assistant", text: replyText }]);
     } catch (err) {
       console.error(err);
-      setError(
-        "エラーが発生しました。少し時間をおいて、もう一度お試しください。"
-      );
+      setError("エラーが発生しました。少し時間をおいて、もう一度お試しください。");
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", text: "（応答がありません）" },
-      ]);
+      setMessages((prev) => [...prev, { role: "assistant", text: "（応答がありません）" }]);
     } finally {
       setLoading(false);
     }
   };
 
-  // フォーム送信（送信ボタン）から呼ばれる
+  // フォーム送信
   const handleSubmit = async (e) => {
     e.preventDefault();
     await sendMessage();
   };
 
-  // ★ Enter キーで送信 / Shift+Enter で改行
+  // Enterで送信 / Shift+Enterで改行
   const handleKeyDown = async (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -192,7 +204,7 @@ export default function Home() {
                     alignItems: isUser ? "flex-end" : "flex-start",
                   }}
                 >
-                  {/* ラベル（誰の発言か） */}
+                  {/* ラベル */}
                   <span
                     style={{
                       fontSize: "11px",
@@ -203,7 +215,7 @@ export default function Home() {
                     {isUser ? "あなた" : "NOAH"}
                   </span>
 
-                  {/* 吹き出し本体 */}
+                  {/* 吹き出し */}
                   <div
                     style={{
                       display: "inline-block",
@@ -223,57 +235,10 @@ export default function Home() {
                       wordBreak: "break-word",
                     }}
                   >
-                    <ReactMarkdown
-                      components={{
-                        p: ({ node, ...props }) => (
-                          <p
-                            style={{
-                              margin: "4px 0",
-                            }}
-                            {...props}
-                          />
-                        ),
-                        ul: ({ node, ...props }) => (
-                          <ul
-                            style={{
-                              margin: "4px 0",
-                              paddingLeft: "1.2em",
-                            }}
-                            {...props}
-                          />
-                        ),
-                        ol: ({ node, ...props }) => (
-                          <ol
-                            style={{
-                              margin: "4px 0",
-                              paddingLeft: "1.4em",
-                            }}
-                            {...props}
-                          />
-                        ),
-                        li: ({ node, ...props }) => (
-                          <li
-                            style={{
-                              margin: "2px 0",
-                            }}
-                            {...props}
-                          />
-                        ),
-                        strong: ({ node, ...props }) => (
-                          <strong
-                            style={{
-                              fontWeight: 700,
-                            }}
-                            {...props}
-                          />
-                        ),
-                      }}
-                    >
-                      {m.text}
-                    </ReactMarkdown>
+                    <ReactMarkdown>{m.text}</ReactMarkdown>
                   </div>
 
-                  {/* ★ 音声で聞くボタン（各メッセージの下） */}
+                  {/* ★ 音声読み上げ */}
                   <button
                     type="button"
                     onClick={() => speak(m.text)}
@@ -336,7 +301,7 @@ export default function Home() {
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown} // ★ ここで Enter をフック
+            onKeyDown={handleKeyDown}
             placeholder="今の気持ちや状況を書いてみてください"
             rows={2}
             style={{
@@ -360,8 +325,7 @@ export default function Home() {
               padding: "8px 18px",
               borderRadius: "10px",
               border: "none",
-              background:
-                loading || !input.trim() ? "#9ca3af" : "#2563eb",
+              background: loading || !input.trim() ? "#9ca3af" : "#2563eb",
               color: "#ffffff",
               fontSize: "14px",
               fontWeight: 600,
