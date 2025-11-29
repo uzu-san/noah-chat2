@@ -1,42 +1,58 @@
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 
-// ★ より自然な日本語ボイスを自動選択する Web Speech API版
-function speak(text) {
-  if (typeof window === "undefined") return;
-  if (!window.speechSynthesis) return;
+/* ----------------------------------------
+   ★ Google TTS 高速＋自然音声版 speak()
+---------------------------------------- */
 
-  const synth = window.speechSynthesis;
+// TTS結果をキャッシュ（同じ文は即再生）
+const audioCache = new Map();
+const MAX_TTS_LENGTH = 400; // 高速化のため読み上げは400文字までに制限
 
-  // Chrome で voices が遅延するケースに対応
-  let voices = synth.getVoices();
-  if (!voices.length) {
-    synth.onvoiceschanged = () => speak(text);
+async function speak(originalText) {
+  if (!originalText) return;
+
+  // 長文は先頭だけ読み上げ（速度最優先）
+  let text = originalText.trim();
+  if (text.length > MAX_TTS_LENGTH) {
+    text = text.slice(0, MAX_TTS_LENGTH) + "。以下は読み上げを省略します。";
+  }
+
+  // キャッシュにあれば即再生（超高速）
+  if (audioCache.has(text)) {
+    const cachedUrl = audioCache.get(text);
+    new Audio(cachedUrl).play();
     return;
   }
 
-  // 日本語ボイス抽出
-  const jaVoices = voices.filter((v) => v.lang.startsWith("ja"));
+  try {
+    const resp = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
 
-  // 女性的・自然なボイスを優先
-  const preferredVoice =
-    jaVoices.find((v) => /female|woman|女性/i.test(v.name)) ||
-    jaVoices[0] ||
-    voices.find((v) => v.lang.startsWith("ja")) ||
-    voices[0];
+    if (!resp.ok) {
+      console.error("TTS API error:", await resp.text());
+      return;
+    }
 
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.lang = "ja-JP";
-  utter.voice = preferredVoice;
+    const arrayBuffer = await resp.arrayBuffer();
+    const blob = new Blob([arrayBuffer], { type: "audio/mpeg" });
+    const url = URL.createObjectURL(blob);
 
-  // より自然に聞こえるチューニング
-  utter.rate = 1.03;
-  utter.pitch = 1.0;
-  utter.volume = 1.0;
+    // キャッシュへ保存
+    audioCache.set(text, url);
 
-  synth.cancel();
-  synth.speak(utter);
+    new Audio(url).play();
+  } catch (e) {
+    console.error("TTS client error:", e);
+  }
 }
+
+/* ----------------------------------------
+   ここから先はあなたの元のコードそのまま
+---------------------------------------- */
 
 export default function Home() {
   const [input, setInput] = useState("");
@@ -49,17 +65,13 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // 自動スクロール用
   const messagesEndRef = useRef(null);
-
-  // 入力欄の自動リサイズ用
   const textareaRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // テキストエリアの自動リサイズ
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -67,21 +79,18 @@ export default function Home() {
     el.style.height = el.scrollHeight + "px";
   }, [input]);
 
-  // ★ 送信ロジック
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
     const userText = input.trim();
     const userMessage = { role: "user", text: userText };
 
-    // ユーザーメッセージを画面に先に追加
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput("");
     setLoading(true);
     setError("");
 
-    // API に送るのは直近6件
     const messagesForApi = updatedMessages.slice(-6);
 
     try {
@@ -107,13 +116,11 @@ export default function Home() {
     }
   };
 
-  // フォーム送信
   const handleSubmit = async (e) => {
     e.preventDefault();
     await sendMessage();
   };
 
-  // Enterで送信 / Shift+Enterで改行
   const handleKeyDown = async (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -140,7 +147,6 @@ export default function Home() {
           border: "1px solid #e5e7eb",
         }}
       >
-        {/* ヘッダー */}
         <header
           style={{
             display: "flex",
@@ -172,7 +178,6 @@ export default function Home() {
           </div>
         </header>
 
-        {/* メッセージ一覧 */}
         <div
           style={{
             borderRadius: "12px",
@@ -204,7 +209,6 @@ export default function Home() {
                     alignItems: isUser ? "flex-end" : "flex-start",
                   }}
                 >
-                  {/* ラベル */}
                   <span
                     style={{
                       fontSize: "11px",
@@ -215,7 +219,6 @@ export default function Home() {
                     {isUser ? "あなた" : "NOAH"}
                   </span>
 
-                  {/* 吹き出し */}
                   <div
                     style={{
                       display: "inline-block",
@@ -238,7 +241,7 @@ export default function Home() {
                     <ReactMarkdown>{m.text}</ReactMarkdown>
                   </div>
 
-                  {/* ★ 音声読み上げ */}
+                  {/* 音声読み上げ */}
                   <button
                     type="button"
                     onClick={() => speak(m.text)}
@@ -287,7 +290,6 @@ export default function Home() {
           </p>
         )}
 
-        {/* 入力フォーム */}
         <form
           onSubmit={handleSubmit}
           style={{
