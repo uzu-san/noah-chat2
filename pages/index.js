@@ -234,7 +234,7 @@ export default function Home() {
   ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [reactionDepth, setReactionDepth] = useState(0); // ★反応カウンター
+  const [reactionDepth, setReactionDepth] = useState(0); // 反応カウンター
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -376,7 +376,7 @@ export default function Home() {
           borderRadius: "16px",
           padding: "24px 20px 20px",
           boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
-          border: "1px solid "#e5e7eb",
+          border: "1px solid #e5e7eb",
         }}
       >
         {/* ヘッダー */}
@@ -435,146 +435,3 @@ export default function Home() {
                   marginBottom: "10px",
                 }}
               >
-                <div
-                  style={{
-                    maxWidth: "80%",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: isUser ? "flex-end" : "flex-start",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      color: "#9ca3af",
-                      marginBottom: "2px",
-                    }}
-                  >
-                    {isUser ? "あなた" : "NOAH"}
-                  </span>
-
-                  <div
-                    style={{
-                      display: "inline-block",
-                      padding: "10px 12px",
-                      borderRadius: "14px",
-                      background: isUser ? "#dbeafe" : "#ffffff",
-                      border: isUser
-                        ? "1px solid #bfdbfe"
-                        : "1px solid #e5e7eb",
-                      boxShadow: isUser
-                        ? "0 1px 4px rgba(59,130,246,0.15)"
-                        : "0 1px 4px rgba(15,23,42,0.08)",
-                      textAlign: "left",
-                      lineHeight: 1.6,
-                      fontSize: "14px",
-                      color: "#111827",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    <ReactMarkdown>{m.text}</ReactMarkdown>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => speak(m.text)}
-                    style={{
-                      marginTop: "4px",
-                      fontSize: "11px",
-                      color: "#6b7280",
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      textDecoration: "underline",
-                      alignSelf: isUser ? "flex-end" : "flex-start",
-                    }}
-                  >
-                    🔊 このメッセージを聞く
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-
-          {loading && (
-            <div
-              style={{
-                fontSize: "13px",
-                color: "#6b7280",
-                marginTop: "4px",
-              }}
-            >
-              NOAH が考えを整理しています…
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {error && (
-          <p
-            style={{
-              color: "#dc2626",
-              marginBottom: "8px",
-              fontSize: "13px",
-            }}
-          >
-            {error}
-          </p>
-        )}
-
-        {/* 入力フォーム */}
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            display: "flex",
-            gap: "8px",
-            marginTop: "8px",
-            alignItems: "flex-end",
-          }}
-        >
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="今の気持ちや状況を書いてみてください"
-            rows={2}
-            style={{
-              flex: 1,
-              padding: "10px 12px",
-              borderRadius: "10px",
-              border: "1px solid #d1d5db",
-              fontSize: "14px",
-              outline: "none",
-              resize: "none",
-              lineHeight: "1.5",
-              minHeight: "44px",
-              maxHeight: "140px",
-              overflowY: "auto",
-            }}
-          />
-          <button
-            type="submit"
-            disabled={loading || !input.trim()}
-            style={{
-              padding: "8px 18px",
-              borderRadius: "10px",
-              border: "none",
-              background:
-                loading || !input.trim() ? "#9ca3af" : "#2563eb",
-              color: "#ffffff",
-              fontSize: "14px",
-              fontWeight: 600,
-              cursor:
-                loading || !input.trim() ? "default" : "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            送信
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
