@@ -46,7 +46,7 @@ const NOAH_SYSTEM_PROMPT = `
 - 対話の終わりには、その回で見えたことを一行で整理して返す。
   例：「今日は“できごと”よりも、その瞬間の反応のほうが負荷になっていた部分が見えてきましたね。」
 - 行動指示はしない。
-  「今日の判断や行動が、少しでも楽になりそうなポイントはありましたか？」
+  「今日の判断や行動が、少しでも楽になりそうなポイントはありますか？」
   程度の問いかけにとどめる。
 
 【禁止・注意】
@@ -112,7 +112,6 @@ const noahVocabulary = {
   ],
 };
 
-// アシスタントの出力を「ビジネス寄り」に整える
 function sanitizeAssistantText(text) {
   if (!text) return text;
   let result = text;
@@ -129,7 +128,7 @@ function sanitizeAssistantText(text) {
 }
 
 /* ----------------------------------------
-   堂々巡り判定（超シンプル版）
+   堂々巡り判定（シンプル版：同じ話の繰り返し検出）
 ---------------------------------------- */
 
 function detectLoop(userMessages) {
@@ -222,7 +221,7 @@ async function speak(originalText) {
 }
 
 /* ----------------------------------------
-   ここから下は NOAH 本体（UI＋送信ロジック）
+   NOAH 本体（UI＋送信ロジック＋反応カウンター）
 ---------------------------------------- */
 
 export default function Home() {
@@ -235,6 +234,7 @@ export default function Home() {
   ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [reactionDepth, setReactionDepth] = useState(0); // ★反応カウンター
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -262,18 +262,43 @@ export default function Home() {
     setLoading(true);
     setError("");
 
-    // ユーザー発話だけ抜き出して堂々巡りチェック
+    // 1) ユーザーの感情語を検出して反応カウンターを更新
+    const emotionWords = ["焦り", "不安", "嫌", "つら", "辛", "苦", "怖", "やば"];
+    let newDepth = reactionDepth;
+    if (emotionWords.some((w) => userText.includes(w))) {
+      newDepth = reactionDepth + 1;
+    }
+
+    // 2) 一定回数を超えたら「まとめフェーズ」へ（API 呼び出しをスキップ）
+    if (newDepth >= 3) {
+      const summary =
+        "ここまでのお話を整理すると、\n" +
+        "「実際に起きていること」そのものよりも、\n" +
+        "その場面で立ち上がる“焦りや不安の反応”のほうが、\n" +
+        "集中力や判断を揺らしていたように見えます。\n\n" +
+        "このことに気づいた今、\n" +
+        "今日の行動や取り組みが、少しでもラクになりそうなポイントはありますか？";
+
+      setReactionDepth(0); // リセット
+      setMessages((prev) => [...prev, { role: "assistant", text: summary }]);
+      setLoading(false);
+      return;
+    } else {
+      setReactionDepth(newDepth);
+    }
+
+    // 3) ユーザー発話だけ抜き出して堂々巡りチェック
     const userMessagesOnly = updatedMessages
       .filter((m) => m.role === "user")
       .map((m) => m.text);
 
     const isLoop = detectLoop(userMessagesOnly);
 
-    // 堂々巡りっぽいときは、一度整理の問いを返してAPI呼び出しをスキップ
     if (isLoop) {
       const loopReply =
         "少し同じところをぐるぐる回っている感じもありますね。\n" +
-        "いちど整理のために、**実際に起きたできごと** と、**それを見たときに立ち上がった反応** を、もう一度だけ分けてみてもよいでしょうか？";
+        "いちど整理のために、**実際に起きたできごと** と、\n" +
+        "**それを見たときに立ち上がった反応** を、もう一度だけ分けてみてもよいでしょうか？";
 
       setMessages((prev) => [
         ...prev,
@@ -283,10 +308,9 @@ export default function Home() {
       return;
     }
 
-    // 直近のメッセージ（会話履歴）をAPIに送る
+    // 4) 直近のメッセージ（会話履歴）をAPIに送る
     const messagesForApi = updatedMessages.slice(-6);
 
-    // systemプロンプトを先頭に追加して送信
     const apiPayload = {
       messages: [
         { role: "system", text: NOAH_SYSTEM_PROMPT },
@@ -352,7 +376,7 @@ export default function Home() {
           borderRadius: "16px",
           padding: "24px 20px 20px",
           boxShadow: "0 10px 30px rgba(15,23,42,0.08)",
-          border: "1px solid #e5e7eb",
+          border: "1px solid "#e5e7eb",
         }}
       >
         {/* ヘッダー */}
