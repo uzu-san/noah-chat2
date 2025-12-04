@@ -1,35 +1,186 @@
-   import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 
 /* ----------------------------------------
-   Google TTS 高速＋自然音声版 speak()
-   （前の音声を止めてから再生・キャッシュ付き）
+   NOAH システムプロンプト（Gemini に渡す軸）
 ---------------------------------------- */
 
-// 今再生中の Audio を保持
-let currentAudio = null;
+const NOAH_SYSTEM_PROMPT = `
+あなたは「NOAH」という名前の対話AIです。
+ユーザーの悩みや混乱を、思考の「内容」ではなく、
+思考が生まれる「反応の構造」から整理することを役割とします。
 
-// TTS結果をキャッシュ（同じ文は2回目以降すぐ再生）
+【基本スタンス】
+- 判断しない・指示しない・励ましすぎない・誘導しない。
+- 心理学用語・宗教用語・スピリチュアルな表現は使わない。
+- 難しい専門用語は避け、日常の例えで説明する。
+- ユーザーを「前向きにさせる」ことではなく、
+  「頭のノイズが減って状況が整理されること」を優先する。
+
+【Mode1：状況の仕分け】
+目的：できごと（事実）と、心の反応（感情・考え）を分ける。
+- 例：「雨が降っている」はできごと、「最悪だ…」は反応。
+- 使う質問例：
+  - 「まず、“起きたできごと” を簡単に教えてもらえますか？」
+  - 「そのとき、起きたできごとと、そのときの反応を分けるとどうなりそうですか？」
+
+話が広がったり、自己分析に寄りすぎたら、
+「いまのは心の反応のほうかもしれません。
+  その前に起きた“できごと”はどんなことでしたか？」
+のように優しく軌道修正してください。
+
+【Mode2：反応の内側を見る】
+目的：反応がどんな仕組みで立ち上がっているかを見える化する。
+- 原因探しや過去ほじくりはしない。「なぜ？」は極力使わない。
+- 使う質問例：
+  - 「そのできごとを見た瞬間、まず何が動きましたか？」
+  - 「その反応は、どこから立ち上がってくる感じですか？」
+  - 「その反応が強くなると、判断や行動にどんな影響がありますか？」
+
+ユーザーが自己否定や分析に入りすぎたら、
+「すこし分析寄りになりましたね。
+  その手前で起きていた“反応そのもの”に戻ってみましょう。」
+などと返し、やさしく“いま起きている反応”に戻してください。
+
+【まとめ】
+- 対話の終わりには、その回で見えたことを一行で整理して返す。
+  例：「今日は“できごと”よりも、その瞬間の反応のほうが負荷になっていた部分が見えてきましたね。」
+- 行動指示はしない。
+  「今日の判断や行動が、少しでも楽になりそうなポイントはありましたか？」
+  程度の問いかけにとどめる。
+
+【禁止・注意】
+- 「静けさ」「悟り」「宇宙」「波動」「エネルギー」「エゴ」「魂」などの宗教的・スピリチュアルな語は使わない。
+- 代わりに、「頭のノイズが減る」「モヤモヤが整理される」「状況が見えやすくなる」など、現実的な表現を使う。
+- 個人情報（氏名・住所・連絡先・職場・病歴など）には触れない。
+`;
+
+/* ----------------------------------------
+   ビジネス向け語彙セット＆置き換えフィルタ
+---------------------------------------- */
+
+const noahVocabulary = {
+  replacements: [
+    {
+      avoid: ["静かになる", "心が静まる", "静けさ"],
+      use: ["頭のノイズが減る", "気持ちのざわつきが少しおさまる"],
+    },
+    {
+      avoid: ["悟り", "悟る", "目覚める"],
+      use: ["腑に落ちる", "はっきり見えてくる"],
+    },
+    {
+      avoid: ["宇宙", "宇宙の流れ"],
+      use: ["周りの状況", "今の環境"],
+    },
+    {
+      avoid: ["波動", "エネルギーが上がる", "エネルギー"],
+      use: ["雰囲気が変わる", "空気感が変わる"],
+    },
+    {
+      avoid: ["エゴ"],
+      use: ["自分の中の決めつけ", "頭の中のストーリー"],
+    },
+    {
+      avoid: ["内的な自由"],
+      use: ["余計な縛りが少ない状態", "必要以上に自分をしばっていない状態"],
+    },
+    {
+      avoid: ["執着を手放す", "執着"],
+      use: ["こだわりが少しゆるむ", "そこに考えを貼りつけ過ぎない"],
+    },
+    {
+      avoid: ["癒やされる", "癒される"],
+      use: ["気持ちの負担が少し軽くなる"],
+    },
+    {
+      avoid: ["魂", "真我", "本質"],
+      use: ["自分の本音", "心の奥で本当に感じていること"],
+    },
+    {
+      avoid: ["心が落ち着く"],
+      use: ["判断しやすい状態になる", "冷静さを取り戻しやすくなる"],
+    },
+    {
+      avoid: ["心が軽くなる"],
+      use: ["考えすぎで重くなっていた部分が少し弱まる"],
+    },
+    {
+      avoid: ["心がクリアになる"],
+      use: ["状況が整理されて見えやすくなる"],
+    },
+  ],
+};
+
+// アシスタントの出力を「ビジネス寄り」に整える
+function sanitizeAssistantText(text) {
+  if (!text) return text;
+  let result = text;
+  for (const group of noahVocabulary.replacements) {
+    const replaceTo =
+      group.use[Math.floor(Math.random() * group.use.length)];
+    for (const ng of group.avoid) {
+      if (result.includes(ng)) {
+        result = result.split(ng).join(replaceTo);
+      }
+    }
+  }
+  return result;
+}
+
+/* ----------------------------------------
+   堂々巡り判定（超シンプル版）
+---------------------------------------- */
+
+function detectLoop(userMessages) {
+  if (userMessages.length < 4) return false;
+
+  const recent = userMessages.slice(-4);
+  const joined = recent.join(" ");
+
+  const metaWords = ["また同じ", "進まない", "ぐるぐる", "どうしたらいい", "わからない"];
+  const metaHit = metaWords.some((w) => joined.includes(w));
+
+  const similarity = (s1, s2) => {
+    const a = s1.trim();
+    const b = s2.trim();
+    const minLen = Math.min(a.length, b.length);
+    if (minLen === 0) return 0;
+    let same = 0;
+    for (let i = 0; i < minLen; i++) {
+      if (a[i] === b[i]) same++;
+    }
+    return same / minLen;
+  };
+
+  const s1 = similarity(recent[2], recent[3]);
+  const s2 = similarity(recent[1], recent[2]);
+
+  return metaHit || s1 > 0.75 || s2 > 0.75;
+}
+
+/* ----------------------------------------
+   Google TTS 高速＋自然音声版 speak()
+---------------------------------------- */
+
+let currentAudio = null;
 const audioCache = new Map();
-const MAX_TTS_LENGTH = 400; // 高速化のため読み上げは400文字まで
+const MAX_TTS_LENGTH = 400;
 
 async function speak(originalText) {
   if (!originalText) return;
 
-  // すでに再生中なら止める
   if (currentAudio) {
     currentAudio.pause();
     currentAudio.currentTime = 0;
     currentAudio = null;
   }
 
-  // 長文は先頭だけ読み上げ（速度優先）
   let text = originalText.trim();
   if (text.length > MAX_TTS_LENGTH) {
     text = text.slice(0, MAX_TTS_LENGTH) + "。以下は読み上げを省略します。";
   }
 
-  // キャッシュにあれば即再生
   if (audioCache.has(text)) {
     const cachedUrl = audioCache.get(text);
     const audio = new Audio(cachedUrl);
@@ -57,7 +208,6 @@ async function speak(originalText) {
     const blob = new Blob([arrayBuffer], { type: "audio/mpeg" });
     const url = URL.createObjectURL(blob);
 
-    // キャッシュ保存
     audioCache.set(text, url);
 
     const audio = new Audio(url);
@@ -72,7 +222,7 @@ async function speak(originalText) {
 }
 
 /* ----------------------------------------
-   ここから下は NOAH 本体（前とほぼ同じ）
+   ここから下は NOAH 本体（UI＋送信ロジック）
 ---------------------------------------- */
 
 export default function Home() {
@@ -112,21 +262,55 @@ export default function Home() {
     setLoading(true);
     setError("");
 
+    // ユーザー発話だけ抜き出して堂々巡りチェック
+    const userMessagesOnly = updatedMessages
+      .filter((m) => m.role === "user")
+      .map((m) => m.text);
+
+    const isLoop = detectLoop(userMessagesOnly);
+
+    // 堂々巡りっぽいときは、一度整理の問いを返してAPI呼び出しをスキップ
+    if (isLoop) {
+      const loopReply =
+        "少し同じところをぐるぐる回っている感じもありますね。\n" +
+        "いちど整理のために、**実際に起きたできごと** と、**それを見たときに立ち上がった反応** を、もう一度だけ分けてみてもよいでしょうか？";
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: loopReply },
+      ]);
+      setLoading(false);
+      return;
+    }
+
+    // 直近のメッセージ（会話履歴）をAPIに送る
     const messagesForApi = updatedMessages.slice(-6);
+
+    // systemプロンプトを先頭に追加して送信
+    const apiPayload = {
+      messages: [
+        { role: "system", text: NOAH_SYSTEM_PROMPT },
+        ...messagesForApi,
+      ],
+    };
 
     try {
       const resp = await fetch("/api/gemini", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: messagesForApi }),
+        body: JSON.stringify(apiPayload),
       });
 
       if (!resp.ok) throw new Error(`API error: ${resp.status}`);
 
       const data = await resp.json();
-      const replyText = data.text?.trim() || "（応答がありません）";
+      const rawReply = data.text?.trim() || "（応答がありません）";
+      const replyText = sanitizeAssistantText(rawReply);
 
-      setMessages((prev) => [...prev, { role: "assistant", text: replyText }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", text: replyText },
+      ]);
     } catch (err) {
       console.error(err);
       setError("エラーが発生しました。少し時間をおいて、もう一度お試しください。");
@@ -198,7 +382,7 @@ export default function Home() {
                 fontSize: "13px",
               }}
             >
-              あなたの「考えごと」を静かに整理する、思考ナビゲーター。
+              あなたの「考えごと」を整理する、思考ナビゲーター。
             </p>
           </div>
         </header>
@@ -235,7 +419,6 @@ export default function Home() {
                     alignItems: isUser ? "flex-end" : "flex-start",
                   }}
                 >
-                  {/* ラベル */}
                   <span
                     style={{
                       fontSize: "11px",
@@ -246,7 +429,6 @@ export default function Home() {
                     {isUser ? "あなた" : "NOAH"}
                   </span>
 
-                  {/* 吹き出し */}
                   <div
                     style={{
                       display: "inline-block",
@@ -269,7 +451,6 @@ export default function Home() {
                     <ReactMarkdown>{m.text}</ReactMarkdown>
                   </div>
 
-                  {/* 音声読み上げボタン */}
                   <button
                     type="button"
                     onClick={() => speak(m.text)}
@@ -299,7 +480,7 @@ export default function Home() {
                 marginTop: "4px",
               }}
             >
-              NOAH が静かに考えています…
+              NOAH が考えを整理しています…
             </div>
           )}
 
@@ -356,11 +537,13 @@ export default function Home() {
               padding: "8px 18px",
               borderRadius: "10px",
               border: "none",
-              background: loading || !input.trim() ? "#9ca3af" : "#2563eb",
+              background:
+                loading || !input.trim() ? "#9ca3af" : "#2563eb",
               color: "#ffffff",
               fontSize: "14px",
               fontWeight: 600,
-              cursor: loading || !input.trim() ? "default" : "pointer",
+              cursor:
+                loading || !input.trim() ? "default" : "pointer",
               whiteSpace: "nowrap",
             }}
           >
