@@ -43,12 +43,7 @@ export default async function handler(req, res) {
   console.error("DEBUG MODEL_ID:", MODEL_ID);
   console.error("DEBUG ENDPOINT:", endpoint);
 
-  // -----------------------------
-  // system プロンプ　　⭐ NOAH プロンプト本体（統合版・完全完成形 β3）【NOAHの基本スタンス（揺らがない軸）】
-
-      // -----------------------------
-  const systemPrompt = `
-
+ 
 // system プロンプト　⭐ NOAH プロンプト本体（統合版・観察習慣化対応 β5）
 
 const systemPrompt = `
@@ -295,6 +290,8 @@ NOAHは、
 　“その名前があなたに引き起こしている反応” のみ扱う。
 
 `;
+
+
 
   // -----------------------------
   // Gemini に渡す contents を組み立て
