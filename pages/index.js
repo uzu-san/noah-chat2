@@ -326,10 +326,9 @@ export default function Home() {
       const replyText = data.text?.trim() || "（応答がありません）";
 
       // 表示は2ターン固定（NOAHの問い + ユーザー発話）
-      setMessages([
-        { role: "assistant", text: replyText },
-        { role: "user", text: userText },
-      ]);
+      // 履歴を残して、返答を末尾に追加（順番も自然）
+      setMessages((prev) => [...prev, { role: "assistant", text: replyText }]);
+
     } catch (err) {
       console.error(err);
       setError("エラーが発生しました。少し時間をおいて、もう一度お試しください。");
