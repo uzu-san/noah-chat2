@@ -7,7 +7,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ text: "Method not allowed" });
   }
 
-  // body が string の場合も対応（gemini.js と同じ）
   let body = req.body;
   if (typeof body === "string") {
     try {
@@ -18,31 +17,27 @@ export default async function handler(req, res) {
     }
   }
 
-  // フロントから受け取る想定：
-  // { lastNoahQuestion: "...", lastUserMessage: "..." }
-  const lastNoahQuestion = typeof body?.lastNoahQuestion === "string" ? body.lastNoahQuestion : "";
-  const lastUserMessage = typeof body?.lastUserMessage === "string" ? body.lastUserMessage : "";
+  const lastNoahQuestion =
+    typeof body?.lastNoahQuestion === "string" ? body.lastNoahQuestion : "";
+  const lastUserMessage =
+    typeof body?.lastUserMessage === "string" ? body.lastUserMessage : "";
 
   if (!lastUserMessage.trim()) {
     return res.status(400).json({ text: "No user message provided" });
   }
 
-  // API キー
   const apiKey = process.env.CLIENT_KEY;
   if (!apiKey) {
     console.error("CLIENT_KEY is missing");
     return res.status(500).json({ text: "Missing API key (CLIENT_KEY)" });
   }
 
-  // モデル（いまの gemini.js に合わせる）
   const MODEL_ID = "gemini-2.0-flash";
-
   const endpoint =
     "https://generativelanguage.googleapis.com/v1beta/models/" +
     MODEL_ID +
     ":generateContent";
 
-  // ---- NOAH：超短文・1問だけ生成させる system ----
   const systemPrompt = `
 あなたは「NOAH」。
 返答は「問い」1つだけ。
@@ -61,7 +56,6 @@ export default async function handler(req, res) {
 ユーザー発言に含まれる「当然の前提」を、そのまま露出させる問いに変換する。
 `.trim();
 
-  // Geminiに渡す最小コンテキスト（2ターン分だけ）
   const contextText = `
 直前のNOAHの問い: ${sanitize(lastNoahQuestion)}
 直前のユーザー発話: ${sanitize(lastUserMessage)}
@@ -69,9 +63,7 @@ export default async function handler(req, res) {
 
   const payloadBase = {
     contents: [
-      // system 相当
       { role: "user", parts: [{ text: systemPrompt }] },
-      // 最小コンテキスト
       { role: "user", parts: [{ text: contextText }] },
     ],
   };
@@ -100,7 +92,6 @@ export default async function handler(req, res) {
 
       const afterJson = Date.now();
 
-      // 503（過負荷）
       if (response.status === 503) {
         console.error("Gemini API overloaded (503).");
         return res.status(503).json({
@@ -109,7 +100,6 @@ export default async function handler(req, res) {
         });
       }
 
-      // その他エラー
       if (!response.ok) {
         console.error("Gemini API error:", response.status, JSON.stringify(data));
         return res.status(500).json({
@@ -119,7 +109,6 @@ export default async function handler(req, res) {
         });
       }
 
-      // 返信テキスト抽出（gemini.js と同じやり方）
       let replyText = "";
       if (Array.isArray(data.candidates) && data.candidates.length > 0) {
         const parts = data.candidates[0]?.content?.parts;
@@ -133,11 +122,9 @@ export default async function handler(req, res) {
 
       replyText = normalize(replyText);
 
-      // 規格チェック（破ったら再生成）
       const verdict = validateNoahQuestion(replyText);
       console.error("NOAH validate:", verdict, "text:", replyText);
 
-      // 時間ログ
       console.error("TIME total:", afterJson - startTime, "ms");
       console.error("TIME fetch:", afterFetch - beforeFetch, "ms");
 
@@ -146,7 +133,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // 最後の砦（絶対に思想を壊さない固定の問い）
     return res.status(200).json({
       text: "いま起きている事実と、苦しさは同じ瞬間ですか？",
     });
@@ -163,7 +149,7 @@ function sanitize(s) {
 function normalize(s) {
   return String(s || "")
     .replace(/\r/g, "")
-    .replace(/\n+/g, " ") // 1行に潰す
+    .replace(/\n+/g, " ")
     .trim()
     .replace(/^["「]|["」]$/g, "")
     .slice(0, 120);
@@ -171,4 +157,46 @@ function normalize(s) {
 
 function validateNoahQuestion(text) {
   if (!text) return { ok: false, reason: "empty" };
-  if (text.includes("\n")) return { ok: false
+  if (text.includes("\n")) return { ok: false, reason: "multiline" };
+  if (!text.endsWith("？") && !text.endsWith("?"))
+    return { ok: false, reason: "no_question_mark" };
+  if (text.length < 10 || text.length > 80)
+    return { ok: false, reason: "bad_length" };
+
+  const banned = [
+    "大丈夫",
+    "安心",
+    "つらい",
+    "辛い",
+    "大変",
+    "自然です",
+    "よかった",
+    "気づくだけ",
+    "十分です",
+    "少しずつ",
+    "整理すると",
+    "まとめると",
+    "流れ",
+    "見えてきました",
+    "ということですね",
+    "つまり",
+    "なので",
+    "どう感じ",
+    "感情",
+    "気持ち",
+    "なぜ",
+    "きっかけ",
+    "過去",
+    "体のどこ",
+    "呼吸",
+    "力を抜",
+    "リラックス",
+    "しましょう",
+    "してください",
+    "やってみて",
+  ];
+  if (banned.some((w) => text.includes(w)))
+    return { ok: false, reason: "banned_word" };
+
+  return { ok: true };
+}

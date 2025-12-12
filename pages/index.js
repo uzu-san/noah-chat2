@@ -312,60 +312,35 @@ export default function Home() {
     // 4) NOAH専用：直近2ターンだけを /api/noah に送る
 
 // 直前のNOAHの問い（なければ空）
-const lastNoahQuestion =
-  [...updatedMessages].reverse().find((m) => m.role === "assistant")?.text || "";
+    // 4) NOAH専用：直近2ターンだけを /api/noah に送る
 
-const apiPayload = {
-  lastNoahQuestion,
-  lastUserMessage: userText,
-};
+    // 直前のNOAHの問い（なければ空）
+    const lastNoahQuestion =
+      [...updatedMessages]            
+        .reverse()
+        .find((m) => m.role === "assistant")?.text || "";
 
-try {
-  const resp = await fetch("/api/noah", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(apiPayload),
-  });
+    const apiPayload = {
+      lastNoahQuestion,
+      lastUserMessage: userText,
+    };
 
-  if (!resp.ok) throw new Error(`API error: ${resp.status}`);
-
-  const data = await resp.json();
-  const rawReply = data.text?.trim() || "（応答がありません）";
-
-  // NOTE: ここで sanitizeAssistantText をかけると、
-  // NOAHの短文ルールを壊す可能性があるので基本はかけない
-  const replyText = rawReply;
-
-  // 表示は2ターン固定にする（NOAHの問い + ユーザー発話）
-  setMessages((prev) => {
-    const next = [
-      { role: "assistant", text: replyText },
-      { role: "user", text: userText },
-    ];
-    return next;
-  });
-} catch (err) {
-  console.error(err);
-  setError("エラーが発生しました。少し時間をおいて、もう一度お試しください。");
-
-  setMessages((prev) => [
-    ...prev,
-    { role: "assistant", text: "（応答がありません）" },
-  ]);
-} finally {
-  setLoading(false);
-}
-
+    try {
+      const resp = await fetch("/api/noah", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(apiPayload),
+      });
 
       if (!resp.ok) throw new Error(`API error: ${resp.status}`);
 
       const data = await resp.json();
-      const rawReply = data.text?.trim() || "（応答がありません）";
-      const replyText = sanitizeAssistantText(rawReply);
+      const replyText = data.text?.trim() || "（応答がありません）";
 
-      setMessages((prev) => [
-        ...prev,
+      // 表示は2ターン固定（NOAHの問い + ユーザー発話）
+      setMessages([
         { role: "assistant", text: replyText },
+        { role: "user", text: userText },
       ]);
     } catch (err) {
       console.error(err);
@@ -378,7 +353,7 @@ try {
     } finally {
       setLoading(false);
     }
-  };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
