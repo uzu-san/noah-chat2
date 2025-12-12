@@ -116,8 +116,7 @@ function sanitizeAssistantText(text) {
   if (!text) return text;
   let result = text;
   for (const group of noahVocabulary.replacements) {
-    const replaceTo =
-      group.use[Math.floor(Math.random() * group.use.length)];
+    const replaceTo = group.use[Math.floor(Math.random() * group.use.length)];
     for (const ng of group.avoid) {
       if (result.includes(ng)) {
         result = result.split(ng).join(replaceTo);
@@ -234,7 +233,7 @@ export default function Home() {
   ]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [reactionDepth, setReactionDepth] = useState(0); // 反応カウンター
+  const [reactionDepth, setReactionDepth] = useState(0);
 
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
@@ -279,7 +278,7 @@ export default function Home() {
         "このことに気づいた今、\n" +
         "今日の行動や取り組みが、少しでもラクになりそうなポイントはありますか？";
 
-      setReactionDepth(0); // リセット
+      setReactionDepth(0);
       setMessages((prev) => [...prev, { role: "assistant", text: summary }]);
       setLoading(false);
       return;
@@ -300,25 +299,14 @@ export default function Home() {
         "いちど整理のために、実際に起きたできごとと、\n" +
         "それを見たときに立ち上がった反応を、もう一度だけ分けてみてもよいでしょうか？";
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", text: loopReply },
-      ]);
+      setMessages((prev) => [...prev, { role: "assistant", text: loopReply }]);
       setLoading(false);
       return;
     }
 
-    // 4) 直近のメッセージ（会話履歴）をAPIに送る
     // 4) NOAH専用：直近2ターンだけを /api/noah に送る
-
-// 直前のNOAHの問い（なければ空）
-    // 4) NOAH専用：直近2ターンだけを /api/noah に送る
-
-    // 直前のNOAHの問い（なければ空）
     const lastNoahQuestion =
-      [...updatedMessages]            
-        .reverse()
-        .find((m) => m.role === "assistant")?.text || "";
+      [...updatedMessages].reverse().find((m) => m.role === "assistant")?.text || "";
 
     const apiPayload = {
       lastNoahQuestion,
@@ -346,14 +334,11 @@ export default function Home() {
       console.error(err);
       setError("エラーが発生しました。少し時間をおいて、もう一度お試しください。");
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", text: "（応答がありません）" },
-      ]);
+      setMessages((prev) => [...prev, { role: "assistant", text: "（応答がありません）" }]);
     } finally {
       setLoading(false);
     }
-
+  }; // ← これが抜けていてビルドが落ちていました
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -386,7 +371,6 @@ export default function Home() {
           border: "1px solid #e5e7eb",
         }}
       >
-        {/* ヘッダー */}
         <header
           style={{
             display: "flex",
@@ -418,7 +402,6 @@ export default function Home() {
           </div>
         </header>
 
-        {/* メッセージ一覧 */}
         <div
           style={{
             borderRadius: "12px",
@@ -466,9 +449,7 @@ export default function Home() {
                       padding: "10px 12px",
                       borderRadius: "14px",
                       background: isUser ? "#dbeafe" : "#ffffff",
-                      border: isUser
-                        ? "1px solid #bfdbfe"
-                        : "1px solid #e5e7eb",
+                      border: isUser ? "1px solid #bfdbfe" : "1px solid #e5e7eb",
                       boxShadow: isUser
                         ? "0 1px 4px rgba(59,130,246,0.15)"
                         : "0 1px 4px rgba(15,23,42,0.08)",
@@ -530,7 +511,6 @@ export default function Home() {
           </p>
         )}
 
-        {/* 入力フォーム */}
         <form
           onSubmit={handleSubmit}
           style={{
