@@ -309,21 +309,53 @@ export default function Home() {
     }
 
     // 4) 直近のメッセージ（会話履歴）をAPIに送る
-    const messagesForApi = updatedMessages.slice(-6);
+    // 4) NOAH専用：直近2ターンだけを /api/noah に送る
 
-    const apiPayload = {
-      messages: [
-        { role: "system", text: NOAH_SYSTEM_PROMPT },
-        ...messagesForApi,
-      ],
-    };
+// 直前のNOAHの問い（なければ空）
+const lastNoahQuestion =
+  [...updatedMessages].reverse().find((m) => m.role === "assistant")?.text || "";
 
-    try {
-      const resp = await fetch("/api/gemini", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(apiPayload),
-      });
+const apiPayload = {
+  lastNoahQuestion,
+  lastUserMessage: userText,
+};
+
+try {
+  const resp = await fetch("/api/noah", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(apiPayload),
+  });
+
+  if (!resp.ok) throw new Error(`API error: ${resp.status}`);
+
+  const data = await resp.json();
+  const rawReply = data.text?.trim() || "（応答がありません）";
+
+  // NOTE: ここで sanitizeAssistantText をかけると、
+  // NOAHの短文ルールを壊す可能性があるので基本はかけない
+  const replyText = rawReply;
+
+  // 表示は2ターン固定にする（NOAHの問い + ユーザー発話）
+  setMessages((prev) => {
+    const next = [
+      { role: "assistant", text: replyText },
+      { role: "user", text: userText },
+    ];
+    return next;
+  });
+} catch (err) {
+  console.error(err);
+  setError("エラーが発生しました。少し時間をおいて、もう一度お試しください。");
+
+  setMessages((prev) => [
+    ...prev,
+    { role: "assistant", text: "（応答がありません）" },
+  ]);
+} finally {
+  setLoading(false);
+}
+
 
       if (!resp.ok) throw new Error(`API error: ${resp.status}`);
 
@@ -538,7 +570,7 @@ export default function Home() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="今の気持ちや状況を書いてみてください"
+            placeholder=""
             rows={2}
             style={{
               flex: 1,
